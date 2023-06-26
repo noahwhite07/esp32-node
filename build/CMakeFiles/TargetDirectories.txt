@@ -601,6 +601,12 @@ C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/main/CMakeFiles/lis
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/main/CMakeFiles/install.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/main/CMakeFiles/install/local.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/main/CMakeFiles/install/strip.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/edit_cache.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/rebuild_cache.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/list_install_components.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/install.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/install/local.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/esp_idf_lib_helpers/CMakeFiles/install/strip.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/__idf_my_component.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/edit_cache.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/rebuild_cache.dir
@@ -608,6 +614,13 @@ C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeF
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/install.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/install/local.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/my_component/CMakeFiles/install/strip.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/__idf_ultrasonic.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/edit_cache.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/rebuild_cache.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/list_install_components.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/install.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/install/local.dir
+C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/ultrasonic/CMakeFiles/install/strip.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/xbee/CMakeFiles/__idf_xbee.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/xbee/CMakeFiles/edit_cache.dir
 C:/Users/Paula/Desktop/code/esp_idf_test/blink/build/esp-idf/xbee/CMakeFiles/rebuild_cache.dir

@@ -27,7 +27,11 @@
     "regex": "c",
     "byteorder.h": "c",
     "stdint.h": "c",
-    "esp_netif.h": "c"
+    "esp_netif.h": "c",
+    "ultrasonic.h": "c",
+    "esp_err.h": "c",
+    "esp32_pin_aliases.h": "c",
+    "ultrasonic_sensors.h": "c"
   }
 }
 

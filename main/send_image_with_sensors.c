@@ -14,6 +14,7 @@
 
 #include "output.h"
 #include "fetch_image.h"
+#include "ultrasonic_sensors.h"
 
 #define UNUSED(x) (void)(x)
 
@@ -127,6 +128,17 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "Wifi initialized");
+    //=========================================================================//
+    //   Poll ultrasonics
+    //=========================================================================//
+    ESP_LOGI(TAG, "Polling ultrasonics");
+
+    xTaskCreate(ultrasonic_test, "ultrasonic_test", 4096, NULL, 5, NULL);    
+
+    void ultrasonic_test(void *pvParameters);
+    while(!getTriggered()){
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 
     //=========================================================================//
     //    Fetch image from camera
@@ -184,7 +196,7 @@ void sendFrame(uint8_t * payload, uint16_t size){
 }
 
 void sendChunk(const uint8_t *chunk, size_t size) {
-    vTaskDelay(pdMS_TO_TICKS(25));
+    vTaskDelay(pdMS_TO_TICKS(30));
     //taskYIELD();
     //printf("sending chunk of size %zu: {", size);
     //for (size_t i = 0; i < size; i++) {
@@ -217,8 +229,6 @@ void sendImage(){
     // Send the chunk to the remote xbee
     //sendChunk(chunk, sizeof(chunk)/sizeof(chunk[0]));
 
-
-    // TODO: Replace this with variable image size, idk why this even works
     for (size_t i = 0; i < img_size; i += CHUNK_SIZE) {
         size_t chunk_size = (i + CHUNK_SIZE <= img_size) ? CHUNK_SIZE : img_size - i;
         
@@ -235,6 +245,7 @@ void sendImage(){
     ESP_LOGI(TAG, "Done. Exiting...\n");
     vTaskDelay(1000);
 }
+
 
 
 
