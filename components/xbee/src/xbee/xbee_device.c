@@ -34,7 +34,7 @@
 static const char *TAG = "xbee_device.c";
 
 // #ifndef XBEE_DEVICE_VERBOSE
-     //#define XBEE_DEVICE_VERBOSE h
+//      #define XBEE_DEVICE_VERBOSE h
 // #endif
 
 
@@ -609,7 +609,7 @@ int xbee_frame_write( xbee_dev_t *xbee, const void FAR *header,
    xbee_ser_write( &xbee->serport, &checksum, 1);
 
    
-
+   //printf("xbee_frame_write finished");
 
    return 0;
 }

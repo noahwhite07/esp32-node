@@ -51,26 +51,40 @@ int xbee_ser_write( xbee_serial_t *serial, const void FAR *buffer, int length){
 }
 
 int xbee_ser_open( xbee_serial_t *serial, uint32_t baudrate){
-    //ESP_LOGI(TAG, "xbee_ser_open called here\n");
+    ESP_LOGI(TAG, "xbee_ser_open called here\n");
     if (serial == NULL) {
         return -EINVAL;
     }
 
-    // Custom config, change this later
-    serial->uart_num = 2;
-    const uint8_t TX_PIN = 17;
-    const uint8_t RX_PIN = 16; 
-    const uint8_t CTS_PIN = 12;
-    const uint8_t RTS_PIN = 22;
+    // Hardcoded pin config
+    // serial->uart_num = 2;
+    // const uint8_t TX_PIN = 17;
+    // const uint8_t RX_PIN = 16; 
+    // const uint8_t CTS_PIN = 12;
+    // const uint8_t RTS_PIN = 22;
 
 
-    // UART configuration
+    // Hardcoded UART configuration
+    // uart_config_t uart_config = {
+    //     .baud_rate = baudrate,
+    //     .data_bits = UART_DATA_8_BITS,
+    //     .parity = UART_PARITY_DISABLE,
+    //     .stop_bits = UART_STOP_BITS_1,
+    //     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    //     .source_clk = UART_SCLK_APB
+    // };
+
+    const uint8_t TX_PIN = serial->tx_pin;
+    const uint8_t RX_PIN = serial->rx_pin; 
+    const uint8_t CTS_PIN = serial->cts_pin;
+    const uint8_t RTS_PIN = serial->rts_pin;
+
     uart_config_t uart_config = {
-        .baud_rate = baudrate,
+        .baud_rate = serial->baudrate,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS,
         .source_clk = UART_SCLK_APB
     };
 
@@ -79,6 +93,10 @@ int xbee_ser_open( xbee_serial_t *serial, uint32_t baudrate){
     if (err != ESP_OK) {
         return -EIO;
     }
+
+    // Connect a pullup resistor to CTS so it's never floating
+    gpio_set_direction(CTS_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(CTS_PIN, GPIO_PULLUP_ONLY);
 
     // Set up UART pins
     // Replace TX_PIN and RX_PIN with actual GPIO numbers for your hardware setup
@@ -95,6 +113,17 @@ int xbee_ser_open( xbee_serial_t *serial, uint32_t baudrate){
 
     // Update the baudrate field in the xbee_serial_t structure
     serial->baudrate = baudrate;
+
+    ESP_LOGI(TAG, "Serial Pin Config\n");
+    ESP_LOGI(TAG, "============================\n");
+    ESP_LOGI(TAG, "UART NUM: %d\n", serial->uart_num);
+    ESP_LOGI(TAG, "TX: %d\n", TX_PIN);
+    ESP_LOGI(TAG, "RX: %d\n", RX_PIN);
+    ESP_LOGI(TAG, "CTS: %d\n", CTS_PIN);
+    ESP_LOGI(TAG, "RTS: %d\n", RTS_PIN);
+    ESP_LOGI(TAG, "BAUD: %lu\n", baudrate);
+    ESP_LOGI(TAG, "============================\n");
+
 
     return 0;
 }
@@ -160,7 +189,8 @@ int xbee_ser_getchar( xbee_serial_t *serial){
 // Yet to be tested
 
 int xbee_ser_flowcontrol(xbee_serial_t *serial, bool_t enabled) {
-    // //ESP_LOGI(TAG, "xbee_ser_flowcontrol called here\n");
+    ESP_LOGI(TAG, "xbee_ser_flowcontrol called here\n");
+    ESP_LOGI(TAG, "Enabled: %d", enabled);
 
     // // if (serial == NULL) {
     // //     return -EINVAL;
@@ -174,41 +204,41 @@ int xbee_ser_flowcontrol(xbee_serial_t *serial, bool_t enabled) {
 
     // // TODO: Put this back
 
-    // // Check for a valid serial port
-    // if (serial == NULL || serial->uart_num >= UART_NUM_MAX) {
-    //     return -EINVAL;
+    // Check for a valid serial port
+    if (serial == NULL ) {
+        return -EINVAL;
+    }
+
+    uart_port_t uart_num = serial->uart_num;
+    uart_hw_flowcontrol_t flow_ctrl;
+
+    // if (enabled) {
+    //     // Enable hardware flow control (CTS/RTS)
+    //     flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
+    // } else {
+    //     // Disable hardware flow control
+    //     flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     // }
 
-    // uart_port_t uart_num = serial->uart_num;
-    // uart_hw_flowcontrol_t flow_ctrl;
+    flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
 
-    // // if (enabled) {
-    // //     // Enable hardware flow control (CTS/RTS)
-    // //     flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
-    // // } else {
-    // //     // Disable hardware flow control
-    // //     flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
-    // // }
+    ESP_LOGI(TAG, "UART port number: %d", serial->uart_num);
 
-    // flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
+    // Set the hardware flow control
+    esp_err_t res = uart_set_hw_flow_ctrl(uart_num, flow_ctrl, 122 /*rx_flow_ctrl_thresh*/);
 
-    // ESP_LOGI(TAG, "UART port number: %d", serial->uart_num);
+    if (res == ESP_OK) {
+        return 0;
+    } else {
+        return -1;
+    }
 
-    // // Set the hardware flow control
-    // ESP_ERROR_CHECK(uart_set_hw_flow_ctrl(uart_num, flow_ctrl, 122 /*rx_flow_ctrl_thresh*/));
-
-    // // if (result == ESP_OK) {
-    // //     return 0;
-    // // } else {
-    // //     return -1;
-    // // }
-
-    return 0; // Success
+    //return 0; // Success
     
 }
 
 int xbee_ser_set_rts(xbee_serial_t *serial, bool_t asserted) {
-    //ESP_LOGI(TAG, "xbee_ser_set_rts called here\n");
+    ESP_LOGI(TAG, "xbee_ser_set_rts called here\n");
 
     // if (serial == NULL) {
     //     return -EINVAL;
@@ -229,10 +259,22 @@ int xbee_ser_get_cts(xbee_serial_t *serial) {
     //     return -EINVAL;
     // }
 
-    // return gpio_get_level(serial->cts_pin);
+    //return gpio_get_level(serial->cts_pin);
+
+    if (serial == NULL) {
+        return -EINVAL;
+    }
+    
+    int level = gpio_get_level(serial->cts_pin);
+    
+    //ESP_LOGI(TAG, "CTS level: %d\n", level);
+
+    // CTS is active low, so invert the logic level
+    return !level;
+
 
     // TODO: put this back the way it was
-    return 1;
+    //return 1;
 }
 
 const char *xbee_ser_portname( xbee_serial_t *serial){
@@ -288,7 +330,7 @@ int xbee_ser_baudrate(xbee_serial_t *serial, uint32_t baudrate) {
 }
 
 int xbee_ser_break( xbee_serial_t *serial, bool_t enabled){
-    //ESP_LOGI(TAG, "xbee_ser_break called here\n");
+    ESP_LOGI(TAG, "xbee_ser_break called here\n");
 
     if (serial == NULL) {
         return -EINVAL;
@@ -328,19 +370,45 @@ int xbee_ser_tx_free(xbee_serial_t *serial) {
     //     return -EINVAL;
     // }
 
-    // size_t tx_free;
-    // esp_err_t err = uart_get_tx_buffer_free_size(serial->uart_num, &tx_free);
-    // if (err != ESP_OK) {
-    //     return -EIO;
-    // }
+    size_t tx_free;
+    esp_err_t err = uart_get_tx_buffer_free_size(serial->uart_num, &tx_free);
 
-    // return tx_free;
+    //ESP_LOGI(TAG, "TX Free: %zu", tx_free);
+    if (err != ESP_OK) {
+        return -EIO;
+    }
+
+    return tx_free;
 
     // TODO: Put this back
-    return (int)(UINT16_MAX);
+    //return (int)(UINT16_MAX);
+
+    // size_t buffered_size;
+    // esp_err_t ret = uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
+    
+    // if (ret == ESP_OK) {
+    //     printf("Number of bytes in the UART2 TX buffer: %d\n", buffered_size);
+    // } else {
+    //     printf("Error getting the buffered data length\n");
+    // }
+
+    // return buffered_size;
+
 }
 
 int xbee_ser_tx_used(xbee_serial_t *serial) {
+
+    size_t buffered_size;
+    esp_err_t ret = uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
+
+    if (ret == ESP_OK) {
+        //ESP_LOGI(TAG, "TX Used: %zu", buffered_size);
+    } else {
+        printf("Error getting the buffered data length\n");
+    }
+
+    return buffered_size;
+
     //ESP_LOGI(TAG, "xbee_ser_tx_used called here\n");
 
     // if (serial == NULL) {
@@ -365,7 +433,7 @@ int xbee_ser_tx_used(xbee_serial_t *serial) {
 }
 
 int xbee_ser_tx_flush(xbee_serial_t *serial) {
-    //ESP_LOGI(TAG, "xbee_ser_tx_flush called here\n");
+    ESP_LOGI(TAG, "xbee_ser_tx_flush called here\n");
 
     if (serial == NULL) {
         return -EINVAL;
@@ -383,7 +451,7 @@ int xbee_ser_tx_flush(xbee_serial_t *serial) {
 // Yet to be implemented
 
 int xbee_ser_rx_flush( xbee_serial_t *serial){
-    //ESP_LOGI(TAG, "xbee_ser_rx_flush called here\n");
+    ESP_LOGI(TAG, "xbee_ser_rx_flush called here\n");
 
     return 0; // Do nothing
 }

@@ -38,6 +38,26 @@
 
 typedef uint8_t bool_t;
 
+/*
+    Note: THESE ARE FROM THE PERSPECTIVE OF THE ESP32!!!
+    This means "cts_pin" is the pin on the ESP32 to which
+    the XBee's RTS pin is connected!!!
+
+    Flow ctrl pinout:
+
+    XBee      |   ESP32
+    ---------------------------
+    RTS: DIO6  --> CTS: GPIO 15
+    CTS: DIO7  --> RTS: GPIO 12
+    ---------------------------
+
+    Each device will use its RTS to output if it is ready to accept new data and read
+    CTS to see if it is allowed to send data to the other device
+
+    "Set RTS" = "Its okay for you to send data to me"
+    "Get CTS" = "Is it okay for me to send data to you?"
+
+*/ 
 typedef struct xbee_serial_t {
     uart_port_t     uart_num;
     uint32_t        baudrate;
