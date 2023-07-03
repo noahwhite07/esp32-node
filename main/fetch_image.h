@@ -12,4 +12,9 @@ size_t get_image_size();
 uint8_t wifi_initialized();
 uint8_t image_ready();
 void download_image(void *params);
+
+typedef struct{
+    void (*callbackFunction)(void);
+}download_image_params_t;
+
 #endif // FETCH_IMAGE_H

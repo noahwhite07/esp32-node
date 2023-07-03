@@ -84,7 +84,7 @@ int xbee_ser_open( xbee_serial_t *serial, uint32_t baudrate){
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS,
+        .flow_ctrl = UART_HW_FLOWCTRL_CTS ,//UART_HW_FLOWCTRL_CTS_RTS,
         .source_clk = UART_SCLK_APB
     };
 
@@ -220,13 +220,17 @@ int xbee_ser_flowcontrol(xbee_serial_t *serial, bool_t enabled) {
     //     flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     // }
 
-    flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
+    flow_ctrl = UART_HW_FLOWCTRL_CTS; //UART_HW_FLOWCTRL_CTS_RTS;
 
     ESP_LOGI(TAG, "UART port number: %d", serial->uart_num);
 
     // Set the hardware flow control
     esp_err_t res = uart_set_hw_flow_ctrl(uart_num, flow_ctrl, 122 /*rx_flow_ctrl_thresh*/);
 
+
+    //TODO: Implement RTS properly, for now just pull to ground
+    gpio_set_level(GPIO_NUM_4, 0);
+    
     if (res == ESP_OK) {
         return 0;
     } else {

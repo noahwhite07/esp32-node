@@ -93,7 +93,11 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
 
 void download_image(void *params)
-{
+{   
+    // Extract the passed in callback function from the params struct
+    download_image_params_t* download_params = (download_image_params_t*) params;
+
+
     ESP_LOGI(TAG, "Starting download task");
     image_is_ready = 0;
 
@@ -109,12 +113,24 @@ void download_image(void *params)
     
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Image downloaded successfully");
+
+        
     } else {
         ESP_LOGE(TAG, "HTTP GET request failed: %s", esp_err_to_name(err));
     }
-    
-    esp_http_client_cleanup(client);
 
+    
+    
+
+    // Alert the passed in callback function that the image is done downloading
+    if (download_params && download_params->callbackFunction) {
+        ESP_LOGI(TAG, "calling callback function");
+        download_params->callbackFunction();
+    }else{
+        ESP_LOGI(TAG, "oopsie! teehee! :)");
+    }
+
+    esp_http_client_cleanup(client);
     vTaskDelete(NULL);
 }
 

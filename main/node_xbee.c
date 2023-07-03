@@ -15,9 +15,9 @@ xbee_header_transmit_explicit_t header;
 // Initialize the xbee_serial_t struct with your UART settings
 xbee_serial_t XBEE_SERPORT = {
     .uart_num = 2,          // UART port number 2
-    .baudrate = 115200,  // Baud rate 115200
-    .cts_pin = 15,
-    .rts_pin = 12,
+    .baudrate = 230400,  
+    .cts_pin = 2,//15,
+    .rts_pin = 4 ,//12,
     .rx_pin = 16,
     .tx_pin = 17
 };
@@ -60,7 +60,7 @@ void sendFrame(void *pvParameters){ // TODO: Implement retryCount as a parameter
     //     vTaskDelay(pdMS_TO_TICKS(100));
     //     sendFrame(payload, size);
     // }
-    vTaskDelay(pdMS_TO_TICKS(10));
+    //vTaskDelay(pdMS_TO_TICKS(10));
 
     // Attempt to send the frame, retrying after 100 ms if the frame couldnt be send
     while(xbee_frame_write(&my_xbee, &header, sizeof(header), payload, datalen, 0) != 0){

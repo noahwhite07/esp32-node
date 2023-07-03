@@ -4,7 +4,7 @@
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 
-#define BLINK_GPIO 33
+#define BLINK_GPIO 21
 int num;
 
 void app_main(void){

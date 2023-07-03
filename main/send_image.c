@@ -11,6 +11,7 @@
 #include "xbee/discovery.h"
 #include "xbee/byteorder.h"
 #include "xbee/wpan.h" 
+#include "esp_timer.h"
 
 #include "output.h"
 #include "fetch_image.h"
@@ -24,6 +25,7 @@ static const char *TAG = "send_image";
 void sendFrame(void * pvParameters);
 void sendImage();
 void sendImageTask(void *pvParameters);
+void on_image_downloaded(void);
 
 uint16_t chunks_sent;
 
@@ -32,6 +34,8 @@ uint8_t * image_buff;
 
 // Indicates that the xbee is ready to recieve another frame
 uint8_t ready_to_send_frame = 1;
+
+size_t fetched_image_size;
 
 
 void app_main(void)
@@ -46,41 +50,57 @@ void app_main(void)
     //sendFrame((uint8_t *)"hey", 3);
     //sendImage();
 
+    
+    // gpio_config_t rts_config = {
+    //     .
+    // }
+
+    // Set the RTS pin to low 
+    gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
+    gpio_set_level(GPIO_NUM_4, 0);
+
     //=========================================================================//
     //    Init WiFi connection to ESP32-CAM
     //=========================================================================//
-    // ESP_LOGI(TAG, "Initializing WiFi connection...");
 
-    // xTaskCreate(init_wifi, "init_wifi", 4096, NULL, 2, NULL);
+    ESP_LOGI(TAG, "Initializing WiFi connection...");
 
-    // // Wait for the wifi connection to initialize
-    // while(!wifi_initialized()){
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
-    // }
+    xTaskCreate(init_wifi, "init_wifi", 4096, NULL, 2, NULL);
 
-    // ESP_LOGI(TAG, "Wifi initialized");
+    // Wait for the wifi connection to initialize
+    while(!wifi_initialized()){
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
-    // //=========================================================================//
-    // //    Fetch image from camera
-    // //=========================================================================//
+    ESP_LOGI(TAG, "Wifi initialized");
 
-    // // Begin downloading the image
-    // xTaskCreate(download_image, "download_image", 4096, NULL, 5, NULL);
 
-    // ESP_LOGI(TAG, "Downloading image");
+    //=========================================================================//
+    //    Fetch image from camera
+    //=========================================================================//
+    
+    // Create a params struct to pass into the download image function
+    download_image_params_t * download_img_params = malloc(sizeof(download_image_params_t));
+    download_img_params->callbackFunction = on_image_downloaded;
 
-    // // Wait for the image to finish downloading
+    ESP_LOGI(TAG, "Downloading image");
+
+    // Begin downloading the image
+    xTaskCreate(download_image, "download_image", 8192, download_img_params, 5, NULL);
+
+    
+    // Wait for the image to finish downloading
     // while(!image_ready()){
     //     vTaskDelay(pdMS_TO_TICKS(1000));
     // }
 
-    // ESP_LOGI(TAG, "Image downloaded");
+    //ESP_LOGI(TAG, "Image downloaded");
 
-    // // Save a reference to the image and record its size
+    // Save a reference to the image and record its size
     // image_buff = get_image_buffer();
-    // size_t imageSize = get_image_size();
+    // fetched_image_size = get_image_size();
 
-    // ESP_LOGI(TAG, "Image size: %zu", imageSize);
+    // ESP_LOGI(TAG, "Image size: %zu", fetched_image_size);
 
     //=========================================================================//
     //    Print diagnostic information
@@ -96,17 +116,34 @@ void app_main(void)
     //    Send image to remote XBee module
     //=========================================================================//
 
+    // // Stack size in words, not bytes
+    // const uint16_t stackSize = 8192;
+
+    // // Task priority (higher number means higher priority)
+    // const UBaseType_t taskPriority = 2;
+
+    // // Create the task
+    // xTaskCreate(sendImageTask, "SendImageTask", stackSize, NULL, taskPriority, NULL);
+  
+}
+
+// This function will be called when the image is done being fetched from the ESP32-CAM
+void on_image_downloaded(void){
     // Stack size in words, not bytes
     const uint16_t stackSize = 8192;
 
     // Task priority (higher number means higher priority)
     const UBaseType_t taskPriority = 2;
 
+    // Save a reference to the image and record its size
+    image_buff = get_image_buffer();
+    fetched_image_size = get_image_size();
+
+    ESP_LOGI(TAG, "Image size: %zu", fetched_image_size);
+
     // Create the task
     xTaskCreate(sendImageTask, "SendImageTask", stackSize, NULL, taskPriority, NULL);
-  
 }
-
 
 
 void sendImageTask(void *pvParameters){
@@ -119,16 +156,20 @@ void sendImageTask(void *pvParameters){
 void sendImage(){
 
     
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // Start measuring the time required to transmit the image
+    int64_t start_time = esp_timer_get_time();
+
     chunks_sent = 0;
     // Use the first chunk of the sample image as an example
     //uint8_t chunk[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01};
 
     // Send the chunk to the remote xbee
     //sendChunk(chunk, sizeof(chunk)/sizeof(chunk[0]));
-
-    for (size_t i = 0; i < img_size; i += CHUNK_SIZE) {
-        size_t chunk_size = (i + CHUNK_SIZE <= img_size) ? CHUNK_SIZE : img_size - i;
+    ESP_LOGI(TAG, "Fetched image size: %zu", fetched_image_size);
+    for (size_t i = 0; i < fetched_image_size; i += CHUNK_SIZE) {
+        size_t chunk_size = (i + CHUNK_SIZE <= fetched_image_size) ? CHUNK_SIZE : fetched_image_size - i;
         
         // Test image (hardcoded)
 
@@ -140,7 +181,7 @@ void sendImage(){
 
         send_frame_params_t send_frame_params = {
             .size = chunk_size,
-            .payload = &img[i]
+            .payload = &image_buff[i]
         };
 
         //ESP_LOGI(TAG, "Called sendFrame");
@@ -153,6 +194,8 @@ void sendImage(){
         // Image fetched from cam
         //sendChunk(&image_buff[i], chunk_size);
 
+        // Free the memory allocated to the image after it's been sent
+        //free(image_buff); // TODO: why does this throw an error?
         
 
     }
@@ -164,6 +207,14 @@ void sendImage(){
 
 
     sendFrame(&send_frame_params);
+
+    // Fetch the time at which the image finished sending
+    int64_t end_time = esp_timer_get_time();
+
+    // Calculate and log the elapsed time in seconds
+    double elapsed_time = (double)(end_time - start_time) / 1000000.0;
+
+    ESP_LOGI(TAG, "Elapsed time: %.2f seconds", elapsed_time);
     ESP_LOGI(TAG, "Chunks sent: %d.", chunks_sent);
     ESP_LOGI(TAG, "Done. Exiting...\n");
 
