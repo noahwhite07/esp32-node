@@ -5,3 +5,4 @@ gdbinit
 sdkconfig
 *.old
 CMakeLists.txt 
+managed_components
