@@ -6,3 +6,4 @@ sdkconfig
 *.old
 CMakeLists.txt 
 managed_components
+dependencies.lock
