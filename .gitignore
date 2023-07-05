@@ -4,4 +4,4 @@ build
 gdbinit
 sdkconfig
 *.old
-.\CMakeLists.txt 
+CMakeLists.txt 
