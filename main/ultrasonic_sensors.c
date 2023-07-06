@@ -54,10 +54,10 @@ void register_threshold(void *pvParameters){
     ultrasonic_init(&sensor_b);
 
     // Delay after each sensor measurement
-    const TickType_t sensorDelay = pdMS_TO_TICKS(100);
+    const TickType_t sensorDelay = pdMS_TO_TICKS(200);
     
     // The measurment distance (in cm) at which a sensor is considered "crossed"
-    uint16_t threshold_distance = 90; 
+    uint16_t threshold_distance = 50; 
 
     // Hold the most recent measurment from each sensor
     float distance_a, distance_b;
@@ -81,21 +81,24 @@ void register_threshold(void *pvParameters){
             printf("Sensor A - Error %d\n", res_a);   
             distance_a = FLT_MAX;
         } else{
-            printf("Sensor A - Distance: %.2f cm\n", distance_a);      
+            printf("Sensor %dA - Distance: %.2f cm\n", zone_num, distance_a);      
         }
 
         if (res_b != ESP_OK){
             distance_b = FLT_MAX;
             printf("Sensor B - Error %d\n", res_b); 
         } else {
-            printf("Sensor B - Distance: %.2f cm\n", distance_b );
+            printf("Sensor %dB - Distance: %.2f cm\n", zone_num, distance_b );
         }
 
         // TODO: Refactor this detection logic 
         if(distance_a < threshold_distance && distance_b < threshold_distance){
             // Alert the caller of this function that the threshold has been tripped
             printf("Distance A: %.2f\tDistance B: %.2f\t Threshold Distance: %d", distance_a, distance_b, threshold_distance);
-            thresh_trip_callback();
+            thresh_trip_callback(zone_num);
+
+            // Prevent the threshold from being continuously tripped by a passing vehicle
+            vTaskDelay(pdMS_TO_TICKS(5000)); //TODO: Do this in a more elegant way
         }
 
     }
@@ -430,6 +433,6 @@ void register_threshold(void *pvParameters){
 //     xTaskCreate(ultrasonic_test, "ultrasonic_test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
 // }
 
-uint8_t getTriggered(){
-  return hasTriggered;
-}
+// uint8_t getTriggered(){
+//   return hasTriggered;
+// }

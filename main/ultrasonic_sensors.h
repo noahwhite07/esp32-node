@@ -5,8 +5,8 @@ uint8_t getTriggered();
 
 
 
-// Define the callback function type
-typedef void (*callback_t)(); 
+// Define the callback function type which takes an integer as a parameter
+typedef void (*callback_t)(uint8_t); 
 
 /*
     A struct for passing a callback into a FreeRTOS task
