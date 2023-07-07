@@ -21,19 +21,24 @@
 
 static const char *TAG = "send_image";
 void sendFrame(void * pvParameters);
-void sendImage();
-void sendImageTask(void *pvParameters);
+void sendImage(void *pvParameters);
+
 // Callback for when image has completed downloading from web server
 void on_image_downloaded(uint8_t* img_buff, size_t img_size );
 
+typedef struct {
+    uint8_t* image;
+    size_t image_size;
+}send_image_params_t;
+
 uint16_t chunks_sent;
 
-uint8_t * image_buff;
+//uint8_t * image_buff;
 
 // Indicates that the xbee is ready to recieve another frame
 uint8_t ready_to_send_frame = 1;
 
-size_t fetched_image_size;
+//size_t fetched_image_size;
 
 
 void app_main(void)
@@ -93,46 +98,50 @@ void app_main(void)
     } else {
         printf("Error getting the buffered data length\n");
     }
-
-    //=========================================================================//
-    //    Send image to remote XBee module
-    //=========================================================================//
-
-    // // Stack size in words, not bytes
-    // const uint16_t stackSize = 8192;
-
-    // // Task priority (higher number means higher priority)
-    // const UBaseType_t taskPriority = 2;
-
-    // // Create the task
-    // xTaskCreate(sendImageTask, "SendImageTask", stackSize, NULL, taskPriority, NULL);
   
 }
 
-// This function will be called when the image is done being fetched from the ESP32-CAM
 void on_image_downloaded(uint8_t* img_buff, size_t img_size){
 
-    // Save a reference to the image and record its size
-    image_buff = img_buff; // TODO: this should be copied, not referenced directly
-    fetched_image_size = img_size;
-
-    ESP_LOGI(TAG, "Image size: %zu", fetched_image_size);
+    // Allocate a new buffer to store a copy of the image
+    uint8_t* new_img_buff = (uint8_t*) malloc(img_size);
     
+    // Check if allocation succeeded
+    if (new_img_buff == NULL) {
+        ESP_LOGE(TAG, "Memory allocation failed for image buffer");
+        return;
+    }
+    
+    // Copy the content of the original buffer to the new buffer
+    memcpy(new_img_buff, img_buff, img_size);
 
+    // Free the original buffer
+    free(img_buff);
+
+    // Save a reference to the new image buffer and record its size
+    //image_buff = new_img_buff;
+    //fetched_image_size = img_size;
+
+
+
+    ESP_LOGI(TAG, "Image size: %zu", img_size);
+
+    // Create a params struct to pass into the send image function
+    send_image_params_t * send_image_params = malloc(sizeof(send_image_params_t));
+    send_image_params->image = new_img_buff;
+    send_image_params->image_size = img_size;
+    
     // Create the task
-    xTaskCreate(sendImageTask, "SendImageTask", 8192, NULL, 2, NULL);
+    xTaskCreate(sendImage, "SendImageTask", 8192, send_image_params, 2, NULL);
 }
 
-// TODO: remove this function and have send_image take in an image to send
-void sendImageTask(void *pvParameters){
-    sendImage();
 
-    // Delete this task when its done
-    vTaskDelete(NULL);
-}
 
-void sendImage(){
+void sendImage(void *pvParameters){
+    send_image_params_t *params = (send_image_params_t *)pvParameters;
 
+    uint8_t* image = params->image;
+    size_t image_size = params->image_size;
     
     vTaskDelay(pdMS_TO_TICKS(100));
 
@@ -140,16 +149,12 @@ void sendImage(){
     int64_t start_time = esp_timer_get_time();
 
     chunks_sent = 0;
-    // Use the first chunk of the sample image as an example
-    //uint8_t chunk[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01};
 
-    // Send the chunk to the remote xbee
-    //sendChunk(chunk, sizeof(chunk)/sizeof(chunk[0]));
-    ESP_LOGI(TAG, "Fetched image size: %zu", fetched_image_size);
-    for (size_t i = 0; i < fetched_image_size; i += CHUNK_SIZE) {
-        size_t chunk_size = (i + CHUNK_SIZE <= fetched_image_size) ? CHUNK_SIZE : fetched_image_size - i;
+    // Send each chunk to the remote xbee
+    ESP_LOGI(TAG, "Fetched image size: %zu", image_size);
+    for (size_t i = 0; i < image_size; i += CHUNK_SIZE) {
+        size_t chunk_size = (i + CHUNK_SIZE <= image_size) ? CHUNK_SIZE : image_size - i;
         
-        // Test image (hardcoded)
 
         // We should only try to call this again if the previous chunk was sent sucesfully
         // So the sendChunk function should return a success value
@@ -159,7 +164,7 @@ void sendImage(){
 
         send_frame_params_t send_frame_params = {
             .size = chunk_size,
-            .payload = &image_buff[i]
+            .payload = &image[i]
         };
 
         //ESP_LOGI(TAG, "Called sendFrame");
@@ -167,7 +172,7 @@ void sendImage(){
         // Create a task for sending the frame with priority 2
         //xTaskCreate(sendFrame, "Send Frame", 4096, &send_frame_params, 2, NULL);
         
-        sendFrame(&send_frame_params); // debug, take out
+        sendFrame(&send_frame_params); 
 
         // Image fetched from cam
         //sendChunk(&image_buff[i], chunk_size);
@@ -196,10 +201,18 @@ void sendImage(){
     ESP_LOGI(TAG, "Chunks sent: %d.", chunks_sent);
     ESP_LOGI(TAG, "Done. Exiting...\n");
 
+    // Free the memory allocated to the image once it is done being sent
+    free(image);
+
+    free(pvParameters);
+
     // Clear the UART TX buffer after transmission 
     //xbee_ser_tx_flush(&my_xbee);
 
     vTaskDelay(1000);
+
+    // Delete this task when its done
+    vTaskDelete(NULL);
 }
 
 
