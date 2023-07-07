@@ -17,18 +17,16 @@
 #include "fetch_image.h"
 #include "node_xbee.h"
 
-#define UNUSED(x) (void)(x)
-
 #define CHUNK_SIZE 45
 
 static const char *TAG = "send_image";
 void sendFrame(void * pvParameters);
 void sendImage();
 void sendImageTask(void *pvParameters);
-void on_image_downloaded(void);
+// Callback for when image has completed downloading from web server
+void on_image_downloaded(uint8_t* img_buff, size_t img_size );
 
 uint16_t chunks_sent;
-
 
 uint8_t * image_buff;
 
@@ -41,34 +39,25 @@ size_t fetched_image_size;
 void app_main(void)
 {
  
-
     // Initialize communication with the xbee
     xbee_init();
     
-    //{0x11, 0x03, 0x00, 0x13, 0xa2, 0x00, 0x42, 0x0e, 0x74, 0x72, 0xfe, 0xff, 0xe8, 0xe8, 0x11, 0x00, 0x05, 0xc1, 0x00, 0x00}
 
-    //sendFrame((uint8_t *)"hey", 3);
-    //sendImage();
-
-    
-    // gpio_config_t rts_config = {
-    //     .
-    // }
-
-    // Set the RTS pin to low 
+    // Set the RTS pin to low (this should be done in the xbee_init function)
     gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_NUM_4, 0);
 
     //=========================================================================//
-    //    Init WiFi connection to ESP32-CAM
+    //    Init WiFi connection to ESP32-CAMs
     //=========================================================================//
 
-    ESP_LOGI(TAG, "Initializing WiFi connection...");
+    ESP_LOGI(TAG, "Initializing connection to cameras");
 
-    xTaskCreate(init_wifi, "init_wifi", 4096, NULL, 2, NULL);
+    // TODO: This should actually be a blocking function
+    xTaskCreate(init_cameras, "init_cameras", 4096, NULL, 2, NULL);
 
     // Wait for the wifi connection to initialize
-    while(!wifi_initialized()){
+    while(!cameras_initialized()){
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
@@ -83,28 +72,20 @@ void app_main(void)
     download_image_params_t * download_img_params = malloc(sizeof(download_image_params_t));
     download_img_params->callbackFunction = on_image_downloaded;
 
+
+    // Pass the camera 1 struct into the download_image params
+    download_img_params->cam_zone_num = 1;
+
     ESP_LOGI(TAG, "Downloading image");
 
     // Begin downloading the image
     xTaskCreate(download_image, "download_image", 8192, download_img_params, 5, NULL);
 
-    
-    // Wait for the image to finish downloading
-    // while(!image_ready()){
-    //     vTaskDelay(pdMS_TO_TICKS(1000));
-    // }
-
-    //ESP_LOGI(TAG, "Image downloaded");
-
-    // Save a reference to the image and record its size
-    // image_buff = get_image_buffer();
-    // fetched_image_size = get_image_size();
-
-    // ESP_LOGI(TAG, "Image size: %zu", fetched_image_size);
 
     //=========================================================================//
     //    Print diagnostic information
     //=========================================================================//
+
     size_t buffered_size;
     esp_err_t ret = uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
     if (ret == ESP_OK) {
@@ -112,6 +93,7 @@ void app_main(void)
     } else {
         printf("Error getting the buffered data length\n");
     }
+
     //=========================================================================//
     //    Send image to remote XBee module
     //=========================================================================//
@@ -128,24 +110,20 @@ void app_main(void)
 }
 
 // This function will be called when the image is done being fetched from the ESP32-CAM
-void on_image_downloaded(void){
-    // Stack size in words, not bytes
-    const uint16_t stackSize = 8192;
-
-    // Task priority (higher number means higher priority)
-    const UBaseType_t taskPriority = 2;
+void on_image_downloaded(uint8_t* img_buff, size_t img_size){
 
     // Save a reference to the image and record its size
-    image_buff = get_image_buffer();
-    fetched_image_size = get_image_size();
+    image_buff = img_buff; // TODO: this should be copied, not referenced directly
+    fetched_image_size = img_size;
 
     ESP_LOGI(TAG, "Image size: %zu", fetched_image_size);
+    
 
     // Create the task
-    xTaskCreate(sendImageTask, "SendImageTask", stackSize, NULL, taskPriority, NULL);
+    xTaskCreate(sendImageTask, "SendImageTask", 8192, NULL, 2, NULL);
 }
 
-
+// TODO: remove this function and have send_image take in an image to send
 void sendImageTask(void *pvParameters){
     sendImage();
 

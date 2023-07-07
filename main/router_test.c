@@ -28,13 +28,13 @@ camera_t* cam_3;
 camera_t* cameras[NUM_CAMERAS];
 
 // Keep track of how many cameras have been connected and assigned IP addresses
-uint8_t cameras_initialized = 0;
+uint8_t num_cams_initialized = 0;
 
 // Store the most recently fetched image
 static uint8_t *image_buffer = NULL; // init wifi, wait for wifi initialized, download image, wait for image ready, send image
 static size_t image_size = 0;
 
-static uint8_t wifi_is_initialized = 0;
+static uint8_t cameras_are_initialized = 0;
 static uint8_t image_is_ready = 0;
 
 
@@ -152,13 +152,13 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t eve
         // When every camera has been assigned an IP address, we consider the wifi connections to be initialized
         if(cams_initialized == NUM_CAMERAS){
             // We might want to put a small delay here to give the last camera's web server time to start
-            wifi_is_initialized = 1;
+            cameras_are_initialized = 1;
         }
 
     }
 }
 
-void init_wifi(){
+void init_cameras(){
     //Allocate space for each camera struct and associate the physical address with its zone number
     cam_1 = (camera_t*) malloc(sizeof(camera_t));
     uint8_t mac_1[6] = {0xa0, 0xb7, 0x65, 0x4b, 0xa8, 0xd4};
@@ -234,8 +234,8 @@ void init_wifi(){
     vTaskDelete(NULL);
 }
 
-uint8_t wifi_initialized(){
-    return wifi_is_initialized;
+uint8_t cameras_initialized(){
+    return cameras_are_initialized;
 }
 
 uint8_t image_ready(){
@@ -259,9 +259,6 @@ void download_image(void *params)
     camera_t* cam = download_params->camera;
     char* server_url = cam->server_url;
     uint8_t zone_number = cam->zone_number;
-
-
-
 
     //===========================================================================//
     // Download an image from the camera's web server
@@ -325,10 +322,10 @@ void app_main(void) {
 
     ESP_LOGI(TAG, "Initializing WiFi connection...");
 
-    xTaskCreate(init_wifi, "init_wifi", 4096, NULL, 2, NULL);
+    xTaskCreate(init_cameras, "init_cameras", 4096, NULL, 2, NULL);
 
     // Wait for the wifi connection to initialize
-    while(!wifi_initialized()){
+    while(!cameras_initialized()){
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 

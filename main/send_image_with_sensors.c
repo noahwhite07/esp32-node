@@ -120,10 +120,10 @@ void app_main(void)
     //=========================================================================//
     ESP_LOGI(TAG, "Initializing WiFi connection...");
 
-    xTaskCreate(init_wifi, "init_wifi", 4096, NULL, 2, NULL);
+    xTaskCreate(init_cameras, "init_cameras", 4096, NULL, 2, NULL);
 
     // Wait for the wifi connection to initialize
-    while(!wifi_initialized()){
+    while(!cameras_initialized()){
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 

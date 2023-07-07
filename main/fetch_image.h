@@ -6,10 +6,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void init_wifi();
+void init_cameras();
 uint8_t* get_image_buffer();
 size_t get_image_size();
-uint8_t wifi_initialized();
+uint8_t cameras_initialized();
 uint8_t image_ready();
 void download_image(void *params);
 
@@ -29,7 +29,8 @@ typedef struct{
 // This way the caller doesnt have to initialize them and pass them in
 typedef struct{
     void (*callbackFunction)(uint8_t*, size_t);
-    camera_t* camera;
+    //camera_t* camera;
+    uint8_t cam_zone_num;
 }download_image_params_t;
 
 
