@@ -63,7 +63,7 @@ void register_threshold(void *pvParameters){
     ultrasonic_init(&sensor_b);
 
     // Delay after each sensor measurement
-    const TickType_t sensorDelay = pdMS_TO_TICKS(40);
+    const TickType_t sensorDelay = pdMS_TO_TICKS(200);
     
     // The measurment distance (in cm) at which a sensor is considered "crossed"
     uint16_t threshold_distance = 50; 
@@ -84,7 +84,9 @@ void register_threshold(void *pvParameters){
 
         // Take a measurment from each sensor
         esp_err_t res_a = ultrasonic_measure(&sensor_a, MAX_DISTANCE_CM, &distance_a);
-        vTaskDelay(sensorDelay); // Introduce delay before triggering sensor A
+        //vTaskDelay(sensorDelay); // Introduce delay before triggering sensor A
+        vTaskDelay(pdMS_TO_TICKS(40)); // Introduce delay before triggering sensor A
+
 
         esp_err_t res_b = ultrasonic_measure(&sensor_b, MAX_DISTANCE_CM, &distance_b);
         vTaskDelay(sensorDelay); // Introduce delay before triggering sensor B

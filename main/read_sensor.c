@@ -35,49 +35,49 @@ void app_main(void){
     // Start polling sensor 2
     //========================================================//
 
-    // sensor_pair_t *s2 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
-    // s2->trig =  S2_TRIG;
-    // s2->echo_a = S2_ECHO_A;
-    // s2->echo_b = S2_ECHO_B;
-    // s2->zone = 2;
+    sensor_pair_t *s2 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s2->trig =  S2_TRIG;
+    s2->echo_a = S2_ECHO_A;
+    s2->echo_b = S2_ECHO_B;
+    s2->zone = 2;
 
-    // register_threshold_params_t *s2_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
-    // s2_params->sensor_pair = *s2;
-    // s2_params->callback_function = on_camera_triggered;
+    register_threshold_params_t *s2_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s2_params->sensor_pair = *s2;
+    s2_params->callback_function = on_camera_triggered;
 
-    // xTaskCreate(register_threshold, "register_threshold", 2048, s2_params, 2, NULL);
+    xTaskCreate(register_threshold, "register_threshold", 2048, s2_params, 4, NULL);
 
     //========================================================//
     // Start polling sensor 3
     //========================================================//
 
-    // sensor_pair_t *s3 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
-    // s3->trig =  S3_TRIG;
-    // s3->echo_a = S3_ECHO_A;
-    // s3->echo_b = S3_ECHO_B;
-    // s3->zone = 3;
+    sensor_pair_t *s3 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s3->trig =  S3_TRIG;
+    s3->echo_a = S3_ECHO_A;
+    s3->echo_b = S3_ECHO_B;
+    s3->zone = 3;
 
-    // register_threshold_params_t *s3_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
-    // s3_params->sensor_pair = *s3;
-    // s3_params->callback_function = on_camera_triggered;
+    register_threshold_params_t *s3_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s3_params->sensor_pair = *s3;
+    s3_params->callback_function = on_camera_triggered;
         
-    // xTaskCreate(register_threshold, "register_threshold", 2048, s3_params, 2, NULL);
+    //xTaskCreate(register_threshold, "register_threshold", 2048, s3_params, 4, NULL);
 
     //========================================================//
     // Start polling sensor 4
     //========================================================//
 
-    // sensor_pair_t *s4 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
-    // s4->trig =  S4_TRIG;
-    // s4->echo_a = S4_ECHO_A;
-    // s4->echo_b = S4_ECHO_B;
-    // s4->zone = 4;
+    sensor_pair_t *s4 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s4->trig =  S4_TRIG;
+    s4->echo_a = S4_ECHO_A;
+    s4->echo_b = S4_ECHO_B;
+    s4->zone = 4;
     
-    // register_threshold_params_t *s4_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
-    // s4_params->sensor_pair = *s4;
-    // s4_params->callback_function = on_camera_triggered;
+    register_threshold_params_t *s4_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s4_params->sensor_pair = *s4;
+    s4_params->callback_function = on_camera_triggered;
 
-    // xTaskCreate(register_threshold, "register_threshold", 2048, s4_params, 2, NULL);
+    //xTaskCreate(register_threshold, "register_threshold", 2048, s4_params, 4, NULL);
 
 }
 
