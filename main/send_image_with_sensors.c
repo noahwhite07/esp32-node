@@ -19,6 +19,7 @@
 #include "ultrasonic_sensors.h"
 #include "esp32_pin_aliases.h"
 #include "node_sensor_config.h"
+#include "indicator.h"
 
 #define CHUNK_SIZE 45
 
@@ -31,7 +32,7 @@ void init_sensors();
 // Callback for when image has completed downloading from web server
 void on_image_downloaded(uint8_t* img_buff, size_t img_size, uint8_t zone);
 
-void on_frame_receieved(uint8_t indicator_state);
+void on_indicator_state_change(uint8_t indicator_state);
 
 typedef struct {
     uint8_t* image;
@@ -48,11 +49,18 @@ uint8_t ready_to_send_frame = 1;
 void app_main(void)
 {
     // Initialize communication with the xbee
-    xbee_init(on_frame_receieved);
+    xbee_init(on_indicator_state_change);
 
     // Set the RTS pin to low (this should be done in the xbee_init function)
     gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_NUM_4, 0);
+
+    //=========================================================================//
+    //    Init indicator SPI interface
+    //=========================================================================//
+
+    // TODO: test this
+    init_indicator();
 
     //=========================================================================//
     //    Init WiFi connection to ESP32-CAMs
@@ -93,9 +101,15 @@ void app_main(void)
   
 }
 
-void on_frame_receieved(uint8_t indicator_state){
+/*
+    This function will be called when the base station responds to a transmitted
+    image with a new indicator state
+*/
+void on_indicator_state_change(uint8_t indicator_state){
     ESP_LOGI(TAG, "Frame recieved. New state: %d", indicator_state);
 
+    // Update the indicator's LED matrix to display the new state
+    updateIndicator(indicator_state); // TODO: test this
 }
 
 /*
