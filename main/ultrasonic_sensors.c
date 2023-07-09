@@ -5,6 +5,7 @@
 #include <ultrasonic.h>
 #include <esp_err.h>
 #include <float.h>
+#include "esp_log.h"
 
 #include "ultrasonic_sensors.h"
 #include "esp32_pin_aliases.h"
@@ -13,6 +14,14 @@
 #define ANSI_COLOR_RED     "\x1b[31m"
 
 #define MAX_DISTANCE_CM 500 // 5m max - 16 feet
+
+// For the implementation of the state machine that detects vehicles
+#define STATE_NONE_TRIPPED 0
+#define STATE_A_TRIPPED 1
+#define STATE_BOTH_TRIPPED 2
+#define STATE_B_TRIPPED 3
+
+static const char *TAG = "ultrasonic_sensors";
 
 
 void register_threshold(void *pvParameters){
@@ -54,7 +63,7 @@ void register_threshold(void *pvParameters){
     ultrasonic_init(&sensor_b);
 
     // Delay after each sensor measurement
-    const TickType_t sensorDelay = pdMS_TO_TICKS(200);
+    const TickType_t sensorDelay = pdMS_TO_TICKS(40);
     
     // The measurment distance (in cm) at which a sensor is considered "crossed"
     uint16_t threshold_distance = 50; 
@@ -62,15 +71,23 @@ void register_threshold(void *pvParameters){
     // Hold the most recent measurment from each sensor
     float distance_a, distance_b;
 
+    // The initial state of the sensor pair
+    int state = STATE_NONE_TRIPPED;
+
+    ESP_LOGI(TAG, "Sensor pair %d registered. Started polling sensors...", zone_num);
+
     // Constantly poll the sensor pair at a regular interval
     while(true){
 
+        // Store the previous state of the sensor pair
+        int prev_state = state;
+
         // Take a measurment from each sensor
         esp_err_t res_a = ultrasonic_measure(&sensor_a, MAX_DISTANCE_CM, &distance_a);
-        vTaskDelay(sensorDelay*2); // Introduce delay before triggering sensor A
+        vTaskDelay(sensorDelay); // Introduce delay before triggering sensor A
 
         esp_err_t res_b = ultrasonic_measure(&sensor_b, MAX_DISTANCE_CM, &distance_b);
-        vTaskDelay(sensorDelay*2); // Introduce delay before triggering sensor B
+        vTaskDelay(sensorDelay); // Introduce delay before triggering sensor B
 
         // Convert reading from meters to centimeters
         distance_a *= 100;
@@ -91,15 +108,60 @@ void register_threshold(void *pvParameters){
             //printf("Sensor %dB - Distance: %.2f cm\n", zone_num, distance_b );
         }
 
-        // TODO: Refactor this detection logic 
-        if(distance_a < threshold_distance && distance_b < threshold_distance){
-            // Alert the caller of this function that the threshold has been tripped
+
+        // Determine the current state of the pair based on the most recent measurments
+        if (distance_a < threshold_distance && distance_b < threshold_distance) {
+            state = STATE_BOTH_TRIPPED; // 2
+        } else if (distance_a < threshold_distance) {
+            state = STATE_A_TRIPPED; // 1
+        } else if (distance_b < threshold_distance) {
+            state = STATE_B_TRIPPED; //3
+        } else {
+            state = STATE_NONE_TRIPPED; //0
+        }
+
+        // Detection sequence should go 0-->1-->2-->3-->0
+
+        if(prev_state != state){
+            ESP_LOGI(TAG, "Sensor %d state transition.\tPrev state: %d, New state: %d", zone_num, prev_state, state);
+            printf("Distance A: %.2f\tDistance B: %.2f\t Threshold Distance: %d", distance_a, distance_b, threshold_distance);
+        }
+        // Detect a valid transition sequence (A -> BOTH -> B)
+        if (prev_state == STATE_A_TRIPPED && state == STATE_BOTH_TRIPPED) {
+
+            // No action needed, just continue to the next state
+        } else if(prev_state == STATE_NONE_TRIPPED && state == STATE_A_TRIPPED){
+            // Transition from none to A is also valid, so no action needed
+
+        }else if (prev_state == STATE_BOTH_TRIPPED && state == STATE_B_TRIPPED) {
+
+            // We've detected a valid sequence, so call the callback
             printf("Distance A: %.2f\tDistance B: %.2f\t Threshold Distance: %d", distance_a, distance_b, threshold_distance);
             thresh_trip_callback(zone_num);
 
             // Prevent the threshold from being continuously tripped by a passing vehicle
-            vTaskDelay(pdMS_TO_TICKS(5000)); //TODO: Do this in a more elegant way
+            vTaskDelay(pdMS_TO_TICKS(5000));
+
+        } else if (state != prev_state) {
+            ESP_LOGI(TAG, "Invalid sequence, resetting state...");
+
+            // If we're not in a valid sequence and the state has changed, reset the sequence
+            state = STATE_NONE_TRIPPED;
         }
+
+        
+
+        
+
+        // TODO: Refactor this detection logic 
+        // if(distance_a < threshold_distance && distance_b < threshold_distance){
+        //     // Alert the caller of this function that the threshold has been tripped
+        //     printf("Distance A: %.2f\tDistance B: %.2f\t Threshold Distance: %d", distance_a, distance_b, threshold_distance);
+        //     thresh_trip_callback(zone_num);
+
+        //     // Prevent the threshold from being continuously tripped by a passing vehicle
+        //     vTaskDelay(pdMS_TO_TICKS(5000)); //TODO: Do this in a more elegant way
+        // }
 
     }
 
