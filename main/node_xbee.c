@@ -2,9 +2,13 @@
 
 static const char *TAG = "node_xbee";
 
+int xbee_handle_expl_rx(xbee_dev_t * xbee, const void * raw, uint16_t length, void * context);
+void poll_incoming_frames(void* pvParameters);
 // Keep statistics for success rate of sending frames
 uint16_t frames_sent = 0;
 uint16_t frames_dropped = 0;
+
+FunctionPointer frame_rx_callback = NULL;
 
 // Reference to the xbee library object
 xbee_dev_t my_xbee;
@@ -22,14 +26,98 @@ xbee_serial_t XBEE_SERPORT = {
     .tx_pin = 17
 };
 
+// Define a custom handler for explicit RX frames (0x91)
+#define XBEE_FRAME_HANDLE_RX_EXPL { 0x91, 0, xbee_handle_expl_rx, NULL }
+
+// Define a custom handler for explicit RX frames (0x90)
+//#define XBEE_FRAME_HANDLE_RX { 0x90, 0, xbee_handle_rx, NULL }
+
 // Tell the XBee library which incoming frame types we care about recieveing 
 const xbee_dispatch_table_entry_t xbee_frame_handlers[] = {
     XBEE_FRAME_HANDLE_LOCAL_AT,
     XBEE_FRAME_MODEM_STATUS_DEBUG,
     XBEE_FRAME_HANDLE_ATND_RESPONSE,
     XBEE_FRAME_HANDLE_AO0_NODEID,
+
+    //Custom
+    XBEE_FRAME_HANDLE_RX_EXPL,
+    //XBEE_FRAME_HANDLE_RX,
+
     XBEE_FRAME_TABLE_END
 };
+
+int xbee_handle_expl_rx(xbee_dev_t * xbee, const void * raw, uint16_t length, void * context){
+    ESP_LOGI(TAG, "length: %d\n", length);
+
+    // /* For some reason, the reported "length" is always 12 greater than the actual # of payload bytes in the frame*/
+    // size_t payload_length = length - 12; // Length of the payload
+    
+    // // Allocate a string with a space for a null terminator 
+    // uint8_t* null_terminated_payload = malloc(payload_length + 1);
+    
+    // const xbee_frame_receive_t  *frame = raw;
+    // const uint8_t* payload = frame->payload;
+
+    // memcpy(null_terminated_payload, payload, payload_length); // Copy payload to new array
+    // null_terminated_payload[payload_length] = '\0'; // Append null character
+
+    // ESP_LOGI(TAG, "Handling TX frame...\n");
+    // ESP_LOGI(TAG, "Got payload: %s\n", null_terminated_payload);
+    // printf("Got payload: %s\n", null_terminated_payload);
+
+    // free(null_terminated_payload);
+    // Cast raw to uint8_t pointer for ease of processing
+    uint8_t* raw_bytes = (uint8_t*)raw;
+    
+    printf("Raw data in hex: ");
+    for(int i = 0; i < length; ++i) {
+        printf("0x%02X", raw_bytes[i]);
+        if(i != length - 1) {  // Avoid comma after last element
+            printf(", ");
+        }
+    }
+    printf("\n");
+
+    // If the payload is exactly 1 character
+    if(length == 19){
+        ESP_LOGI(TAG, "Num received: %c", raw_bytes[length-1]);
+        frame_rx_callback(raw_bytes[length-1] - '0');
+    }
+    
+    return 0;
+}
+
+
+
+// //TODO: move this into main to act as a callback
+// // A callback for 0x91 frames recieved from the remote xbee
+// int xbee_handle_expl_rx(xbee_dev_t * xbee, const void * raw, uint16_t length, void * context){
+//     ESP_LOGI(TAG, "EXPL RX FRAME RECEIVED");
+
+//     return 0;
+// }
+
+// A callback for 0x90 frames recieved from the remote xbee
+// int xbee_handle_rx(xbee_dev_t * xbee, const void * raw, uint16_t length, void * context){
+//     ESP_LOGI(TAG, "RX FRAME RECEIVED");
+
+//     return 0;
+// }
+
+void poll_incoming_frames(void* pvParameters){
+    int status;
+
+    // Wait for a response in a non-blocking fashion
+    do {
+        taskYIELD();
+        status = xbee_dev_tick(&my_xbee);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        if (status < 0) {
+            ESP_LOGI(TAG, "Error %d from xbee_dev_tick().\n", status);      
+        }             
+        
+    } while(1);
+}
 
 // Send an explicit TX frame (0x11) to the remote Xbee device with the given payload
 void sendFrame(void *pvParameters){ // TODO: Implement retryCount as a parameter
@@ -90,7 +178,7 @@ void sendFrame(void *pvParameters){ // TODO: Implement retryCount as a parameter
     //vTaskDelete(NULL);
 }
 
-void xbee_init(void){
+void xbee_init(FunctionPointer fp){
 
     //=========================================================================//
     //    Initialize XBee module
@@ -136,4 +224,10 @@ void xbee_init(void){
     header.profile_id_be = htobe16(WPAN_PROFILE_DIGI); 
     header.broadcast_radius = 0;
     header.options = 0x0;
+
+    // create a global reference to the frame receieved callback
+    frame_rx_callback = fp;
+
+    // Start polling for incoming frames in the background
+    xTaskCreate(poll_incoming_frames, "poll_incoming_frames", 4096, NULL, 1, NULL);
 }
