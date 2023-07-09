@@ -257,8 +257,6 @@ void download_image(void *params)
     uint8_t zone_number = download_params->cam_zone_num;
 
 
-
-
     //===========================================================================//
     // Download an image from the camera's web server
     //===========================================================================//
@@ -292,13 +290,17 @@ void download_image(void *params)
     // Alert the passed in callback function that the image is done downloading
     if (download_params && download_params->callbackFunction) {
         ESP_LOGI(TAG, "calling callback function");
-        download_params->callbackFunction(image_buffer, image_size);
+        download_params->callbackFunction(image_buffer, image_size, zone_number);
     }else{
         ESP_LOGI(TAG, "NULL Callback function");
     }
 
     esp_http_client_cleanup(client);
 
+    // Free the image_buffer and set it to NULL to start fresh for the next image
+    free(image_buffer);
+    image_buffer = NULL;
+    image_size = 0;
 
     vTaskDelete(NULL);
 }

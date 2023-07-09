@@ -33,21 +33,15 @@ typedef struct {
 
 uint16_t chunks_sent;
 
-//uint8_t * image_buff;
-
 // Indicates that the xbee is ready to recieve another frame
 uint8_t ready_to_send_frame = 1;
-
-//size_t fetched_image_size;
 
 
 void app_main(void)
 {
- 
     // Initialize communication with the xbee
     xbee_init();
     
-
     // Set the RTS pin to low (this should be done in the xbee_init function)
     gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_NUM_4, 0);
@@ -118,11 +112,6 @@ void on_image_downloaded(uint8_t* img_buff, size_t img_size){
     // Free the original buffer
     free(img_buff);
 
-    // Save a reference to the new image buffer and record its size
-    //image_buff = new_img_buff;
-    //fetched_image_size = img_size;
-
-
 
     ESP_LOGI(TAG, "Image size: %zu", img_size);
 
@@ -134,7 +123,6 @@ void on_image_downloaded(uint8_t* img_buff, size_t img_size){
     // Create the task
     xTaskCreate(sendImage, "SendImageTask", 8192, send_image_params, 2, NULL);
 }
-
 
 
 void sendImage(void *pvParameters){
@@ -154,41 +142,21 @@ void sendImage(void *pvParameters){
     ESP_LOGI(TAG, "Fetched image size: %zu", image_size);
     for (size_t i = 0; i < image_size; i += CHUNK_SIZE) {
         size_t chunk_size = (i + CHUNK_SIZE <= image_size) ? CHUNK_SIZE : image_size - i;
-        
 
-        // We should only try to call this again if the previous chunk was sent sucesfully
-        // So the sendChunk function should return a success value
-
-        
-        //sendChunk(&img[i], chunk_size);
 
         send_frame_params_t send_frame_params = {
             .size = chunk_size,
             .payload = &image[i]
         };
-
-        //ESP_LOGI(TAG, "Called sendFrame");
-
-        // Create a task for sending the frame with priority 2
-        //xTaskCreate(sendFrame, "Send Frame", 4096, &send_frame_params, 2, NULL);
         
         sendFrame(&send_frame_params); 
-
-        // Image fetched from cam
-        //sendChunk(&image_buff[i], chunk_size);
-
-        // Free the memory allocated to the image after it's been sent
-        //free(image_buff); // TODO: why does this throw an error?
-        
-
     }
 
+    // Send a sequence to the remote xbee to signal the end of an image transmission
     send_frame_params_t send_frame_params = {
         .size = 4,
         .payload = (uint8_t *)"done"
     };
-
-
     sendFrame(&send_frame_params);
 
     // Fetch the time at which the image finished sending

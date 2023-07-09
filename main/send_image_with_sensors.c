@@ -11,115 +11,56 @@
 #include "xbee/discovery.h"
 #include "xbee/byteorder.h"
 #include "xbee/wpan.h" 
+#include "esp_timer.h"
 
 #include "output.h"
 #include "fetch_image.h"
+#include "node_xbee.h"
 #include "ultrasonic_sensors.h"
-
-#define UNUSED(x) (void)(x)
+#include "esp32_pin_aliases.h"
+#include "node_sensor_config.h"
 
 #define CHUNK_SIZE 45
 
 static const char *TAG = "send_image";
-void sendFrame(uint8_t * payload, uint16_t size);
-void sendChunk(const uint8_t *chunk, size_t size);
-void sendImage();
-void sendImageTask(void *pvParameters);
+void sendFrame(void * pvParameters);
+void sendImage(void *pvParameters);
+void on_camera_triggered(uint8_t zone_number);
+void init_sensors();
 
-// Header for a 0x11 TX frame
-xbee_header_transmit_explicit_t header;
+// Callback for when image has completed downloading from web server
+void on_image_downloaded(uint8_t* img_buff, size_t img_size, uint8_t zone);
 
-// Initialize the xbee_dev_t struct
-xbee_dev_t my_xbee;
+void on_frame_receieved(uint8_t indicator_state);
+
+typedef struct {
+    uint8_t* image;
+    size_t image_size;
+    uint8_t zone;
+}send_image_params_t;
 
 uint16_t chunks_sent;
 
+// Indicates that the xbee is ready to recieve another frame
+uint8_t ready_to_send_frame = 1;
 
-uint8_t * image_buff;
-
-// Frame handler table for routing incoming frames
-const xbee_dispatch_table_entry_t xbee_frame_handlers[] =
-{
-    XBEE_FRAME_HANDLE_LOCAL_AT,
-    XBEE_FRAME_MODEM_STATUS_DEBUG,
-    XBEE_FRAME_HANDLE_ATND_RESPONSE,
-    XBEE_FRAME_HANDLE_AO0_NODEID,
-
-    XBEE_FRAME_TABLE_END
-};
 
 void app_main(void)
 {
+    // Initialize communication with the xbee
+    xbee_init(on_frame_receieved);
+
+    // Set the RTS pin to low (this should be done in the xbee_init function)
+    gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
+    gpio_set_level(GPIO_NUM_4, 0);
 
     //=========================================================================//
-    //    Initialize XBee module
+    //    Init WiFi connection to ESP32-CAMs
     //=========================================================================//
 
-    // Initialize the xbee_serial_t struct with your UART settings
-    xbee_serial_t XBEE_SERPORT = {
-        .uart_num = 2,          // UART port number 2
-        .baudrate = 115200,  // Baud rate 115200
-        .cts_pin = 15,
-        .rts_pin = 12,
-        .rx_pin = 16,
-        .tx_pin = 17
-    };
+    ESP_LOGI(TAG, "Initializing connection to cameras");
 
-
-    // Open the XBee device
-    if (xbee_dev_init(&my_xbee, &XBEE_SERPORT, NULL, NULL) != 0) {
-        ESP_LOGI(TAG, "Failed to initialize device.\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-
-    // Initialize the AT Command layer for this XBee device
-    xbee_cmd_init_device(&my_xbee);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    ESP_LOGI(TAG, "Waiting for XBee device to initialize...\n");
-    while (xbee_cmd_query_status(&my_xbee) == -EBUSY) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-    ESP_LOGI(TAG, "XBee initialized\n");
-
-    // Keep xbee_dev functions from using flow control
-    xbee_dev_flowcontrol(&my_xbee, 0);
-    xbee_dev_dump_settings(&my_xbee, 0);
-
- 
-    //=========================================================================//
-    //    Instantiate XBee frame header
-    //=========================================================================//
-    
-    // Instantiate an addr64 union to pass into the set_remote function
-    addr64 remoteAddr = {.b = 
-        {0x00, 0x13, 0xA2, 0x00, 0x42, 0x0E, 0x74, 0x72}
-    };
-
-
-    // Fill in the frame header according to our network configuration
-    header.frame_type = (uint8_t) XBEE_FRAME_TRANSMIT_EXPLICIT;
-    //header.frame_id = (uint8_t) xbee_next_frame_id(&my_xbee);
-    header.frame_id = 1;
-    header.ieee_address = remoteAddr;
-    header.network_address_be = htobe16(WPAN_NET_ADDR_UNDEFINED); 
-    header.source_endpoint = 0xE8;
-    header.dest_endpoint = 0xE8;
-    header.cluster_id_be = htobe16(0x11);
-    header.profile_id_be = htobe16(WPAN_PROFILE_DIGI); 
-    header.broadcast_radius = 0;
-    header.options = 0x0;
-
-    
-    //{0x11, 0x03, 0x00, 0x13, 0xa2, 0x00, 0x42, 0x0e, 0x74, 0x72, 0xfe, 0xff, 0xe8, 0xe8, 0x11, 0x00, 0x05, 0xc1, 0x00, 0x00}
-
-    //sendFrame((uint8_t *)"hey", 3);
-    //sendImage();
-
-    //=========================================================================//
-    //    Init WiFi connection to ESP32-CAM
-    //=========================================================================//
-    ESP_LOGI(TAG, "Initializing WiFi connection...");
-
+    // TODO: This should actually be a blocking function
     xTaskCreate(init_cameras, "init_cameras", 4096, NULL, 2, NULL);
 
     // Wait for the wifi connection to initialize
@@ -127,125 +68,213 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    ESP_LOGI(TAG, "Wifi initialized");
-    //=========================================================================//
-    //   Poll ultrasonics
-    //=========================================================================//
-    ESP_LOGI(TAG, "Polling ultrasonics");
+    ESP_LOGI(TAG, "Cameras initialized");
 
-    xTaskCreate(ultrasonic_test, "ultrasonic_test", 4096, NULL, 5, NULL);    
+    //=========================================================================//
+    //    Start polling sensors in the background
+    //=========================================================================//
 
-    void ultrasonic_test(void *pvParameters);
-    while(!getTriggered()){
-        vTaskDelay(pdMS_TO_TICKS(10));
+    ESP_LOGI(TAG, "Initializing sensors");
+    init_sensors();
+    ESP_LOGI(TAG, "Sensors initialized");
+
+
+    //=========================================================================//
+    //    Print diagnostic information
+    //=========================================================================//
+
+    size_t buffered_size;
+    esp_err_t ret = uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
+    if (ret == ESP_OK) {
+        printf("Number of bytes in the UART2 TX buffer: %d\n", buffered_size);
+    } else {
+        printf("Error getting the buffered data length\n");
     }
+  
+}
 
-    //=========================================================================//
-    //    Fetch image from camera
-    //=========================================================================//
+void on_frame_receieved(uint8_t indicator_state){
+    ESP_LOGI(TAG, "Frame recieved. New state: %d", indicator_state);
 
-    // Begin downloading the image
-    xTaskCreate(download_image, "download_image", 4096, NULL, 5, NULL);
+}
+
+/*
+    A callback function for when the camera has triggered
+
+    Takes in the number of the zone that was crossed into
+*/ 
+
+void on_camera_triggered(uint8_t zone_number){
+    ESP_LOGI(TAG, "Zone %d entered", zone_number);
+
+    // Create a params struct to pass into the download image function
+    download_image_params_t * download_img_params = malloc(sizeof(download_image_params_t));
+    download_img_params->callbackFunction = on_image_downloaded;
+
+    // Pass the camera 1 struct into the download_image params
+    download_img_params->cam_zone_num = zone_number;
 
     ESP_LOGI(TAG, "Downloading image");
 
-    // Wait for the image to finish downloading
-    while(!image_ready()){
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    // Begin downloading the image
+    xTaskCreate(download_image, "download_image", 8192, download_img_params, 4, NULL);
+}
+
+
+void on_image_downloaded(uint8_t* img_buff, size_t img_size, uint8_t zone_num){
+
+    // Allocate a new buffer to store a copy of the image
+    uint8_t* new_img_buff = (uint8_t*) malloc(img_size);
+    
+    // Check if allocation succeeded
+    if (new_img_buff == NULL) {
+        ESP_LOGE(TAG, "Memory allocation failed for image buffer");
+        return;
     }
+    
+    // Copy the content of the original buffer to the new buffer
+    memcpy(new_img_buff, img_buff, img_size);
 
-    ESP_LOGI(TAG, "Image downloaded");
+    // Free the original buffer
+    //free(img_buff); //this is implicitly freed when it is realloced in the HTTP handler
 
-    // Save a reference to the image and record its size
-    image_buff = get_image_buffer();
-    size_t imageSize = get_image_size();
 
-    ESP_LOGI(TAG, "Image size: %zu", imageSize);
+    ESP_LOGI(TAG, "Image size: %zu", img_size);
 
-    //=========================================================================//
-    //    Send image to remote XBee module
-    //=========================================================================//
-
-    // Stack size in words, not bytes
-    const uint16_t stackSize = 4096;
-
-    // Task priority (higher number means higher priority)
-    const UBaseType_t taskPriority = 2;
-
+    // Create a params struct to pass into the send image function
+    send_image_params_t * send_image_params = malloc(sizeof(send_image_params_t));
+    send_image_params->image = new_img_buff;
+    send_image_params->image_size = img_size;
+    send_image_params->zone = zone_num; // TODO; Implement actual logic for this
+    
     // Create the task
-    xTaskCreate(sendImageTask, "SendImageTask", stackSize, NULL, taskPriority, NULL);
-
-
-   
+    xTaskCreate(sendImage, "SendImageTask", 8192, send_image_params, 3, NULL);
 }
 
 
+void sendImage(void *pvParameters){
+    send_image_params_t *params = (send_image_params_t *)pvParameters;
 
-// Send an explicit TX frame (0x11) to the remote Xbee device with the given payload
-void sendFrame(uint8_t * payload, uint16_t size){
-
-    uint16_t datalen = size; 
-    chunks_sent++;
+    uint8_t* image = params->image;
+    size_t image_size = params->image_size;
+    uint8_t zone = params->zone;
     
-    //ESP_LOGI(TAG, "Using payload of size %d\n", datalen);
-    //header.frame_id = (uint8_t) xbee_next_frame_id(&my_xbee);
+    vTaskDelay(pdMS_TO_TICKS(100));
 
-    // Send a 0x11 explicit TX frame to the remote Xbee device
-    xbee_frame_write(&my_xbee, &header, sizeof(header), payload, datalen, 0); // xbee_frame_write: frame type 0x11, id 0x03 (24-byte payload)
+    // Start measuring the time required to transmit the image
+    int64_t start_time = esp_timer_get_time();
 
-}
+    chunks_sent = 0;
 
-void sendChunk(const uint8_t *chunk, size_t size) {
-    vTaskDelay(pdMS_TO_TICKS(30));
-    //taskYIELD();
-    //printf("sending chunk of size %zu: {", size);
-    //for (size_t i = 0; i < size; i++) {
-        // printf("0x%02X", chunk[i]);
-        // if (i < size - 1) {
-        //     printf(", ");
-        // }
-    //}
-    //printf("}\n");
-    //taskYIELD();
+    // Send each chunk to the remote xbee
+    ESP_LOGI(TAG, "Fetched image size: %zu", image_size);
+    for (size_t i = 0; i < image_size; i += CHUNK_SIZE) {
+        size_t chunk_size = (i + CHUNK_SIZE <= image_size) ? CHUNK_SIZE : image_size - i;
 
-    sendFrame(chunk, CHUNK_SIZE);
-   
+
+        send_frame_params_t send_frame_params = {
+            .size = chunk_size,
+            .payload = &image[i]
+        };
+        
+        sendFrame(&send_frame_params); 
+    }
     
-}
+    
+    // Create a buffer to hold the payload string
+    char payload_buffer[10]; 
 
-void sendImageTask(void *pvParameters){
-    sendImage();
+    // Format the string to be "zone X", where X is the value of zone
+    sprintf(payload_buffer, "zone %d", zone);
+
+    // Send a sequence to the remote xbee to signal the end of an image transmission
+    send_frame_params_t send_frame_params = {
+        .size = strlen(payload_buffer), // +1 for the null character at the end of the string
+        .payload = (uint8_t *)payload_buffer
+    };
+
+    // Send a sequence to the remote xbee to signal the end of an image transmission
+    // send_frame_params_t send_frame_params = {
+    //     .size = 6,
+    //     .payload = (uint8_t *)"zone 1"
+    // };
+    sendFrame(&send_frame_params);
+
+    
+
+    // Fetch the time at which the image finished sending
+    int64_t end_time = esp_timer_get_time();
+
+    // Calculate and log the elapsed time in seconds
+    double elapsed_time = (double)(end_time - start_time) / 1000000.0;
+
+    ESP_LOGI(TAG, "Elapsed time: %.2f seconds", elapsed_time);
+    ESP_LOGI(TAG, "Chunks sent: %d.", chunks_sent);
+    ESP_LOGI(TAG, "Done. Exiting...\n");
+
+    // Free the memory allocated to the image once it is done being sent
+    free(image); 
+
+    free(pvParameters);
+
+    // Clear the UART TX buffer after transmission 
+    //xbee_ser_tx_flush(&my_xbee);
+
+    vTaskDelay(1000);
 
     // Delete this task when its done
     vTaskDelete(NULL);
 }
 
-void sendImage(){
-    vTaskDelay(pdMS_TO_TICKS(200));
-    chunks_sent = 0;
-    // Use the first chunk of the sample image as an example
-    //uint8_t chunk[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01};
+void init_sensors(){
+    //========================================================//
+    // Start polling sensor 1
+    //========================================================//
 
-    // Send the chunk to the remote xbee
-    //sendChunk(chunk, sizeof(chunk)/sizeof(chunk[0]));
+    sensor_pair_t *s1 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s1->trig =  S1_TRIG;
+    s1->echo_a = S1_ECHO_A;
+    s1->echo_b = S1_ECHO_B;
+    s1->zone = 1;
 
-    for (size_t i = 0; i < img_size; i += CHUNK_SIZE) {
-        size_t chunk_size = (i + CHUNK_SIZE <= img_size) ? CHUNK_SIZE : img_size - i;
+    register_threshold_params_t *s1_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s1_params->sensor_pair = *s1;
+    s1_params->callback_function = on_camera_triggered;
+
+    xTaskCreate(register_threshold, "register_threshold", 2048, s1_params, 5, NULL);
+
+    //========================================================//
+    // Start polling sensor 2
+    //========================================================//
+
+    sensor_pair_t *s2 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s2->trig =  S2_TRIG;
+    s2->echo_a = S2_ECHO_A;
+    s2->echo_b = S2_ECHO_B;
+    s2->zone = 2;
+
+    register_threshold_params_t *s2_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s2_params->sensor_pair = *s2;
+    s2_params->callback_function = on_camera_triggered;
+
+    xTaskCreate(register_threshold, "register_threshold", 2048, s2_params, 5, NULL);
+
+    //========================================================//
+    // Start polling sensor 3
+    //========================================================//
+
+    sensor_pair_t *s3 = (sensor_pair_t *)malloc(sizeof(sensor_pair_t));
+    s3->trig =  S3_TRIG;
+    s3->echo_a = S3_ECHO_A;
+    s3->echo_b = S3_ECHO_B;
+    s3->zone = 3;
+
+    register_threshold_params_t *s3_params = (register_threshold_params_t *)malloc(sizeof(register_threshold_params_t));
+    s3_params->sensor_pair = *s3;
+    s3_params->callback_function = on_camera_triggered;
         
-        // Test image (hardcoded)
-        //sendChunk(&img[i], chunk_size);
-        
-        // Image fetched from cam
-        sendChunk(&image_buff[i], chunk_size);
-
-    }
-
-    sendFrame((uint8_t *)"done", 4);
-    ESP_LOGI(TAG, "Chunks sent: %d.", chunks_sent);
-    ESP_LOGI(TAG, "Done. Exiting...\n");
-    vTaskDelay(1000);
+    xTaskCreate(register_threshold, "register_threshold", 2048, s3_params, 5, NULL);
 }
-
 
 
 

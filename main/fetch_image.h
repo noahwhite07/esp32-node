@@ -28,7 +28,7 @@ typedef struct{
 // TODO: parameter should actually be a new image struct with a buffer and size
 // This way the caller doesnt have to initialize them and pass them in
 typedef struct{
-    void (*callbackFunction)(uint8_t*, size_t);
+    void (*callbackFunction)(uint8_t*, size_t, uint8_t);
     //camera_t* camera;
     uint8_t cam_zone_num;
 }download_image_params_t;
